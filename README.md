@@ -60,6 +60,10 @@ Screenshots are read by Google Gemini (free tier).
     (up to 5). Anything you changed yourself since (e.g. Cash / Chalk) is left alone.
     **Bot units** (Settings → Betting): switch it on and set a unit size, and bets tagged Bot start with those units
     (Cash / Chalk buttons and the Cash popup) instead of your last-used units, without changing your last-used units.
+   **Typed bets** carry everything a screenshot does: `A Wiecek vs B Sec TT Elite OVER Bot Sweep`, or with more detail
+   `Byrtus S vs Heczko M 9:30pm Czech Liga Pro OVER 22/6 79% edge 54% h2h 28 1u Bot` (competition, OVER/UNDER, O/U as `22/6` or
+   `36O 20U`, the O/U %, `edge 54%`, `h2h`, a stake like `1u`, tags by name). A time is optional: without one the bet is added as
+   already started (no alarm) so you can Cash / Chalk it; a message needs at least one bet detail, so ordinary chat is never a bet.
    **Bet size on Bot plays:** a bot post's size (the card's WAGER "UNDER 1u" / "OVER 1.5u", or the pill under a table row's competition "1U OVER (21/28, 75%)") is shown as a **1u / 1.5u** chip beside the Bot tag in the Bets list, and is the default stake in Cash / Chalk. It's for Bot plays only. **Match cards** (the green Discord screenshots) are always tagged **Bot**, like a yellow row. (One match: "TT ELITE SERIES · 3:55 AM", the players, WAGER "UNDER 1u", RECORD "15/20 (75%)") are read too:
    the side comes from the wager, the record becomes the O/U (UNDER 15/20 → 5/15), the wager's units are the default stake when you
    Cash or Chalk, and the bet is added without an edge. **AM/PM:** Gemini reads the time as shown (4:35 PM) and the AM/PM separately, so a dropped "PM" no longer turns an evening match into 4:35 AM. **Timezones:** a time shown with a timezone (e.g. "3:55 AM EDT") is converted
