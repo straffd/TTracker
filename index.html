@@ -1713,6 +1713,14 @@ function nearName(a, b){
     for(let j = 1; j <= b.length; j++){ const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }
   return d[b.length] <= 2;
 }
+/* A bet you've already Cashed or Chalked is in History (same id as its alarm was). It must never come back as an upcoming
+   bet: not from a screenshot sent again, not from a typed bet, not from another device that missed the settle. */
+const settledPlay = (name, start) => plays.find(p => sameMatch(p.name, p.start, name, start));
+function dropSettledAlarms(){
+  const done = new Set(plays.map(p => p.id)), keep = alarms.filter(a => !done.has(a.id) || a.test);
+  if(keep.length === alarms.length) return false;
+  alarms = keep; store.set('tt.alarms', alarms); render(); return true;   // saving it also removes the old copy from your account
+}
 function sameMatch(nameA, startA, nameB, startB){
   if(Math.abs(startA - startB) > 10 * 60e3) return false;
   const [a1, a2] = String(nameA).split(/\s+vs\.?\s+/i).map(surname), [b1, b2] = String(nameB).split(/\s+vs\.?\s+/i).map(surname);
@@ -1933,6 +1941,7 @@ async function createAlarm(info, img, cropIt, sweep, extra = [], keepTags = fals
   const start = matchStart(info);
   if(!start) return { ok:false, name, why:'start time unreadable' };
   const have = alarms.find(x => sameMatch(x.name, x.start, name, start));
+  if(!have && settledPlay(name, start)) return { ok:false, retag:true, name, why:'already in your History (Cashed or Chalked), so it wasn\'t added again' };
   if(have && keepTags){   // you asked to keep its tags: only add the ones you named
     const before = have.tags || [], t = [...before]; extra.forEach(id => { if(!t.includes(id)) t.push(id); }); have.tags = t;
     const added = t.filter(id => !before.includes(id)).map(id => (tags.find(x => x.id === id) || { name:id }).name);
@@ -2053,7 +2062,7 @@ function addTypedBets(list){
   const made = [], skipped = [];
   for(const t of list){
     const name = `${t.p1} vs ${t.p2}`, start = matchStart({ time: t.time, tz: t.tz });
-    if(alarms.some(x => sameMatch(x.name, x.start, name, start))){ skipped.push(name); continue; }
+    if(alarms.some(x => sameMatch(x.name, x.start, name, start)) || settledPlay(name, start)){ skipped.push(name); continue; }
     const a = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, start, ring: start - lead * 60000, lead,
                 side: t.side, line:'', ouPct:'', edge:null, league:'', img:'', fired: start <= Date.now(), added: Date.now(), tags: t.tags || [], manual:true,
                 ...(t.wager ? { wager: t.wager } : {}), ...(t.tz ? { tzFrom: `${t.time} ${t.tz}` } : {}) };
@@ -3386,6 +3395,7 @@ document.addEventListener('visibilitychange', () => {
   openedAt = Date.now(); [...ringing].forEach(id => stopAlarm(id));
 });
 function fire(a){
+  if(plays.some(p => p.id === a.id)){ dropSettledAlarms(); return; }   // already Cashed / Chalked (e.g. a copy from another device): never ring it
   if(!alarmsActive()){ a.fired = true; store.set('tt.alarms', alarms); render(); return; }   // alarms switched off: just mark it as started, silently
   if(isPhone() && a.ring < openedAt - 2000){   // came due while the app wasn't open: opening it counts as stopping it
     a.fired = true; ringing.add(a.id); stopAlarm(a.id); return; }
@@ -3548,6 +3558,7 @@ function refreshFromStore(){
     [...ringing].forEach(id => { const a = alarms.find(x => x.id === id); if(!a || a.stopped) stopAlarm(id, true); });   // stopped (or settled) on another device
     render();
   } finally { sync.applying = false; }
+  if(sync.histReady) dropSettledAlarms();   // an alarm that's already settled (here or elsewhere) is gone, and its copy in your account too
 }
 const setRaw = (k, v) => { try{ v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); }catch(e){} };
 
@@ -3575,6 +3586,7 @@ async function flush(){
       await F.setDoc(uref, data, { merge:true });
     }
     if(keys.includes('tt.alarms')){
+      if(sync.histReady && dropSettledAlarms()) return flush();   // settled on another device: drop it here instead of re-uploading it
       const list = store.get('tt.alarms', []), now = new Map();
       list.forEach(a => { let j = JSON.stringify(a); if(j.length >= MAX_DOC) j = JSON.stringify({ ...a, img:'' }); now.set(a.id, j); });
       const ops = [];
@@ -4224,7 +4236,7 @@ function renderFAlarms(){
   if(!$('#falarms').classList.contains('open') || !social.view) return;
   const c = social.cards.get(social.view) || { username:'…' }, body = $('#faBody'); body.innerHTML = '';
   subjectHead('#faTitle', social.view, 'Bets');
-  const mine = new Set(alarms.map(a => playKey(a.name, a.start))), up = social.viewPlays.filter(p => p.status === 'upcoming' && leagueShown(p)).sort((a, b) => a.start - b.start);
+  const mine = new Set([...alarms, ...plays].map(a => playKey(a.name, a.start))), up = social.viewPlays.filter(p => p.status === 'upcoming' && leagueShown(p)).sort((a, b) => a.start - b.start);
   const filt = el('div', 'seg ranges');
   // how many bets they have coming up, and how many under each filter
   const nIn = up.filter(p => mine.has(playKey(p.name, p.start))).length, counts = { missing: up.length - nIn, both: nIn, all: up.length };

@@ -142,7 +142,7 @@ itself once it's safe: nothing ringing, nothing typed or attached, no popup open
   device. Each device remembers what it last synced, so opening the app **merges** your devices' bets instead of replacing
   them (an edit made offline isn't lost), and a save that fails is retried and tells you in the chat. Accounts from before
   this keep working: the old single-record history is copied across automatically the first time and left in place as a
-  backup. Only the Delete button deletes a bet everywhere: a bet that's just missing on one device is restored from your account.
+  backup. A bet you've Cashed or Chalked can't come back as an upcoming bet: sending its screenshot again, typing it, or an old device that missed the settle all leave it in History only. Only the Delete button deletes a bet everywhere: a bet that's just missing on one device is restored from your account.
   Some things stay on each device instead: the background picture (and its blur/saturation),
   the alarm switches (Ring alarms, or on phones Ring / Notification, Notifications on this device, Keep the screen on), whether the Bets panel is open, and
   any custom alarm sounds you add. Signing out removes your account data from that browser (it stays in your account);
