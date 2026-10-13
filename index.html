@@ -1547,8 +1547,8 @@ Return ONLY a JSON object, no markdown, in this shape:
   "ampm": "AM or PM as shown next to the time, or null if the time is written in 24-hour form",
   "ou_line": "the O/U value as overs/unders, two whole numbers with a slash, copied digit for digit, e.g. 4/12 (from \"4/12 · 25%\") or 36/20 (from \"36O·20U\")",
   "h2h": "the number next to H2H, e.g. 56, or null if the row has none",
-  "wager": "the WAGER text if there is one, e.g. UNDER 1u, else null",
-  "record": "the RECORD text if there is one, e.g. 15/20 (75%), else null",
+  "wager": "the bet size and side if shown: on a match card the WAGER text (e.g. UNDER 1u or OVER 1.5u); on a table row the coloured pill under the competition tag (e.g. 1U OVER (21/28, 75%)). Copy it as written. null if there is none",
+  "record": "the RECORD text on a card (e.g. 15/20 (75%)), or the numbers in the pill's brackets (21/28, 75%), else null",
   "tz": "the timezone written next to a time anywhere in the image, e.g. EDT from \"3:55 AM EDT\", or null if none is shown",
   "ou_pct": "the percentage next to O/U, e.g. 82%",
   "ou_color": "the text colour of the O/U value: green, red or grey",
@@ -1949,6 +1949,8 @@ async function createAlarm(info, img, cropIt, sweep, extra = [], keepTags = fals
   }
   if(have){   // already placed: a new photo can add tags (Bot from a yellow row; SWEEP only if you wrote it) but never removes any
     const bot = (await botRow(img, cropIt ? info.box_2d : null)) || !!info.wager; if(bot) ensureBotTag();   // a match card (it has a WAGER) is a bot post too
+    const haveU = +((String(info.wager || '').match(/(\d+(?:\.\d+)?)\s*u(?:nits?)?\b/i) || [])[1]) || null;
+    if(bot && haveU && !have.wager) have.wager = haveU;
     const before = new Set(have.tags || []), t = [...(have.tags || [])];
     if(bot && !t.includes('bot')) t.unshift('bot'); if(sweep && !t.includes('sweep')) t.push('sweep');
     extra.forEach(id => { if(!t.includes(id)) t.push(id); });   // tags you asked for in the message
@@ -1960,13 +1962,14 @@ async function createAlarm(info, img, cropIt, sweep, extra = [], keepTags = fals
   }
   // Match card: the WAGER says the side ("UNDER 1u", written in green, so its colour means nothing) and the stake;
   // RECORD "15/20 (75%)" is that side's hits out of the meetings, so for UNDER it's 5 overs / 15 unders (as an O/U line)
-  const wg = String(info.wager || '').match(/\b(OVER|UNDER)\b\s*([\d.]+)?\s*u?/i), rec = String(info.record || '').match(/(\d+)\s*\/\s*(\d+)/);
+  const wtxt = String(info.wager || ''), wSide = (wtxt.match(/\b(OVER|UNDER)\b/i) || [])[1], rec = String(info.record || '').match(/(\d+)\s*\/\s*(\d+)/);
+  const wg = wSide ? [wtxt, wSide] : null;   // "UNDER 1u" (card) or "1U OVER (21/28, 75%)" (table row pill): side and size in either order
   const side = wg ? wg[1].toUpperCase() : ouSide(info);
   if(wg && rec && !info.ou_line && +rec[2] >= +rec[1]){
     const hit = +rec[1], miss = +rec[2] - +rec[1];
     info.ou_line = side === 'UNDER' ? `${miss}/${hit}` : `${hit}/${miss}`; info.ou_pct = null; info.h2h = info.h2h || rec[2];
   }
-  const wager = wg && +wg[2] > 0 ? +wg[2] : null;
+  const wager = +((wtxt.match(/(\d+(?:\.\d+)?)\s*u(?:nits?)?\b/i) || [])[1]) || null;
   const edgeNum = parseFloat(String(info.edge||'').replace(/[^\d.]/g,''));
   const shot = (cropIt && await cropRow(img, info.box_2d)) || img;
   const bot = (await botRow(img, cropIt ? info.box_2d : null)) || !!info.wager;   // yellow row or green Discord card (it has a WAGER) = bot pick
@@ -1975,7 +1978,7 @@ async function createAlarm(info, img, cropIt, sweep, extra = [], keepTags = fals
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     name, start, ring: start - lead*60000, lead,
     side, line: fixOuLine(info.ou_line, info.ou_pct, info.h2h), ouPct: info.ou_pct || ouPctOf(fixOuLine(info.ou_line, info.ou_pct, info.h2h)),
-    ...(parseInt(info.h2h, 10) > 0 ? { h2h: parseInt(info.h2h, 10) } : {}), ...(wager ? { wager } : {}),
+    ...(parseInt(info.h2h, 10) > 0 ? { h2h: parseInt(info.h2h, 10) } : {}), ...(wager && bot ? { wager } : {}),   // the bet size is only for Bot plays
     ...(tzOffset(info.tz, start) != null && tzOffset(info.tz, start) !== -new Date(start).getTimezoneOffset() ? { tzFrom: `${info.time} ${String(info.tz).trim().toUpperCase()}` } : {}),
     edge: isNaN(edgeNum) ? null : edgeNum,
     league: compName(info.league),
@@ -2176,6 +2179,7 @@ function render(){
     c.querySelector('.names').onclick = e => { e.stopPropagation(); if(ringing.has(a.id)) stopAlarm(a.id); openLadbrokes(a); };
     if(a.league) c.querySelector('.comp').textContent = a.league;
     c.querySelector('.line').textContent = [fixOuLine(a.line, a.ouPct, a.h2h), a.ouPct].filter(Boolean).join(' · ');
+    if(isBot(a) && +a.wager > 0){ const u = el('span', 'tag unit', fmtU(+a.wager) + 'u'); u.style.setProperty('--c', 'var(--accent,var(--brand))'); u.title = 'Bet size (units) from the bot post'; c.querySelector('.tags').appendChild(u); }   // Bot plays only
     tags.filter(t => (a.tags || []).includes(t.id)).forEach(t => c.querySelector('.tags').appendChild(tagChip(t)));   // in Settings order
     const faces = faceRow(a); if(faces) c.querySelector('.when').appendChild(faces);   // friends who have it too, after the start time
     const fl = faceList(a); if(fl) c.querySelector('.row').after(fl);   // clicked: who's on it
@@ -2452,7 +2456,7 @@ const lastUnits = () => store.get('tt.lastUnits', 1);
 // Bot units (Settings → Betting): bot-tagged bets can start with their own unit size
 const botUnitsOn = () => store.get('tt.botUnitsOn', false) === true && +store.get('tt.botUnits', 0) > 0;
 const usesBotUnits = a => !!a && botUnitsOn() && isBot(a);
-const unitsFor = a => a && +a.wager > 0 ? +a.wager : usesBotUnits(a) ? +store.get('tt.botUnits', 1) : lastUnits();   // a card's WAGER (e.g. 1u) first
+const unitsFor = a => a && isBot(a) && +a.wager > 0 ? +a.wager : usesBotUnits(a) ? +store.get('tt.botUnits', 1) : lastUnits();   // a Bot play's own size (its WAGER, e.g. 1u) first
 function botUnitsPrefs(){ $('#botUnitsOn').checked = store.get('tt.botUnitsOn', false) === true; const u = +store.get('tt.botUnits', 0); $('#botUnits').value = u > 0 ? u : ''; $('#botUnits').disabled = !$('#botUnitsOn').checked; }
 $('#botUnitsOn').onchange = e => { store.set('tt.botUnitsOn', e.target.checked); botUnitsPrefs(); if(e.target.checked && !(+store.get('tt.botUnits', 0) > 0)) $('#botUnits').focus(); };
 $('#botUnits').onchange = e => { const u = +e.target.value; store.set('tt.botUnits', u > 0 ? +u.toFixed(2) : 0); botUnitsPrefs(); };
