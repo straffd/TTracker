@@ -3882,11 +3882,14 @@ const friendOf = uid => social.friendships.find(f => f.status === 'accepted' && 
 
 // ----- Publishing my plays and stats for friends -----
 function publishSoon(){ clearTimeout(social.pubTimer); social.pubTimer = setTimeout(publishPlays, 1200); }
+const SHARE_DAYS = 365, SHARE_MAX = 3000;   // what friends can see of your results
 async function publishPlays(){
   if(!sync.user || !social.me) return;
   const F = fdb(), uid = social.uid, now = Date.now(), want = new Map();
   if(social.me.shareUpcoming !== false) alarms.filter(a => !a.test).forEach(a => want.set('a_' + a.id, { name:a.name, league:a.league || '', start:a.start, side:a.side, line:a.line || '', ouPct:a.ouPct || '', edge:a.edge ?? null, status:'upcoming', ...(a.manual ? { manual:true } : {}), ...(isBot(a) ? { bot:true } : {}), ...(hasSweep(a) ? { sweep:true } : {}), ...(sharedTags(a).length ? { ptags:sharedTags(a) } : {}) }));   // typed bets: friends see them but can't copy
-  plays.filter(p => p.start > now - 60 * 864e5).slice(0, 200).forEach(p => want.set('p_' + p.id, {
+  // Friends see your PNL / History / calendar built from these, so share all of it: a year back, newest first, up to 3000 bets.
+  // (It used to be the newest 200, which cut off the start of the month for anyone betting a dozen times a day.)
+  [...plays].filter(p => p.start > now - SHARE_DAYS * 864e5).sort((a, b) => b.start - a.start).slice(0, SHARE_MAX).forEach(p => want.set('p_' + p.id, {
     name:p.name, league:p.league || '', start:p.start, side:p.side, line:p.line || '', ouPct:p.ouPct || '', edge:p.edge ?? null, status:p.result,
     odds:p.odds || null, units:p.units || 0, pl:+playPL(p).toFixed(4), bot:isBot(p), ...(hasSweep(p) ? { sweep:true } : {}),
     ...(Array.isArray(p.bets) && p.bets.some(b => b.type != null) ? { bets: p.bets.map(b => ({ result:b.result, odds:b.odds ?? null, units:b.units || 0, type:b.type || '' })) } : {}),   // typed bets: friends' Play types split them too
