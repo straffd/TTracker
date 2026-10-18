@@ -3872,6 +3872,7 @@ async function startSocial(uid){
       social.blocked = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       await Promise.all(social.blocked.map(b => getCard(b.who))); renderFriends();
     }));
+    social.pmVer = null;   // month records: re-read what's published before writing
     const old = await F.getDocs(F.collection(sync.fb.db, 'profiles', uid, 'plays'));
     old.docs.forEach(d => social.lastPub.set(d.id, JSON.stringify(d.data())));
     renderAccount(); publishSoon(); beat();
@@ -3882,30 +3883,55 @@ const friendOf = uid => social.friendships.find(f => f.status === 'accepted' && 
 
 // ----- Publishing my plays and stats for friends -----
 function publishSoon(){ clearTimeout(social.pubTimer); social.pubTimer = setTimeout(publishPlays, 1200); }
-const SHARE_DAYS = 365, SHARE_MAX = 3000;   // what friends can see of your results
+/* What friends can see of your results. Your recent bets each get their own record (the last 60 days, newest 300): that's
+   what live features like "placed a bet" and who's-on-it use. Your WHOLE history goes into one record per month
+   (meta/pm_YYYY-MM~n, about 100 KB each), so a friend's PNL, calendar and History are complete however long you've been
+   betting, and viewing it takes a dozen reads instead of thousands. meta/stats lists the months (pm: { id: version }) so a
+   friend only re-reads the ones that changed. */
+const SHARE_RECENT_DAYS = 60, SHARE_RECENT_MAX = 300, BUNDLE_MAX = 700000;
+const pubPlay = p => ({
+  name:p.name, league:p.league || '', start:p.start, side:p.side, line:p.line || '', ouPct:p.ouPct || '', edge:p.edge ?? null, status:p.result,
+  odds:p.odds || null, units:p.units || 0, pl:+playPL(p).toFixed(4), bot:isBot(p), ...(hasSweep(p) ? { sweep:true } : {}),
+  ...(Array.isArray(p.bets) && p.bets.some(b => b.type != null) ? { bets: p.bets.map(b => ({ result:b.result, odds:b.odds ?? null, units:b.units || 0, type:b.type || '' })) } : {}),   // typed bets: friends' Play types split them too
+  ...(sharedTags(p).length ? { ptags:sharedTags(p) } : {}) });   // unit gains are always public to friends
+function monthBundles(){
+  const byMonth = new Map(), out = new Map();
+  [...plays].sort((a, b) => b.start - a.start).forEach(p => { const m = dayKey(p.start).slice(0, 7); if(!byMonth.has(m)) byMonth.set(m, []); byMonth.get(m).push({ id:'p_' + p.id, ...pubPlay(p) }); });
+  byMonth.forEach((list, m) => {
+    let part = [], size = 0, i = 0;
+    const flush = () => { if(part.length) out.set(`pm_${m}~${i++}`, JSON.stringify(part)); part = []; size = 0; };
+    list.forEach(o => { const l = JSON.stringify(o).length + 1; if(size + l > BUNDLE_MAX) flush(); part.push(o); size += l; });
+    flush();
+  });
+  return out;
+}
 async function publishPlays(){
   if(!sync.user || !social.me) return;
   const F = fdb(), uid = social.uid, now = Date.now(), want = new Map();
   if(social.me.shareUpcoming !== false) alarms.filter(a => !a.test).forEach(a => want.set('a_' + a.id, { name:a.name, league:a.league || '', start:a.start, side:a.side, line:a.line || '', ouPct:a.ouPct || '', edge:a.edge ?? null, status:'upcoming', ...(a.manual ? { manual:true } : {}), ...(isBot(a) ? { bot:true } : {}), ...(hasSweep(a) ? { sweep:true } : {}), ...(sharedTags(a).length ? { ptags:sharedTags(a) } : {}) }));   // typed bets: friends see them but can't copy
-  // Friends see your PNL / History / calendar built from these, so share all of it: a year back, newest first, up to 3000 bets.
-  // (It used to be the newest 200, which cut off the start of the month for anyone betting a dozen times a day.)
-  [...plays].filter(p => p.start > now - SHARE_DAYS * 864e5).sort((a, b) => b.start - a.start).slice(0, SHARE_MAX).forEach(p => want.set('p_' + p.id, {
-    name:p.name, league:p.league || '', start:p.start, side:p.side, line:p.line || '', ouPct:p.ouPct || '', edge:p.edge ?? null, status:p.result,
-    odds:p.odds || null, units:p.units || 0, pl:+playPL(p).toFixed(4), bot:isBot(p), ...(hasSweep(p) ? { sweep:true } : {}),
-    ...(Array.isArray(p.bets) && p.bets.some(b => b.type != null) ? { bets: p.bets.map(b => ({ result:b.result, odds:b.odds ?? null, units:b.units || 0, type:b.type || '' })) } : {}),   // typed bets: friends' Play types split them too
-    ...(sharedTags(p).length ? { ptags:sharedTags(p) } : {}) }));   // unit gains are always public to friends
+  [...plays].filter(p => p.start > now - SHARE_RECENT_DAYS * 864e5).sort((a, b) => b.start - a.start).slice(0, SHARE_RECENT_MAX).forEach(p => want.set('p_' + p.id, pubPlay(p)));
   const ops = [];
   want.forEach((v, id) => { const j = JSON.stringify(v); if(social.lastPub.get(id) !== j) ops.push(b => b.set(fdoc('profiles', uid, 'plays', id), v)); });
   social.lastPub.forEach((j, id) => { if(!want.has(id)) ops.push(b => b.delete(fdoc('profiles', uid, 'plays', id))); });
   try{
     for(let i = 0; i < ops.length; i += 20){ const b = F.writeBatch(sync.fb.db); ops.slice(i, i + 20).forEach(op => op(b)); await b.commit(); }
     social.lastPub = new Map([...want].map(([k, v]) => [k, JSON.stringify(v)]));
+    // the month records: only the ones that changed are written (a bet changing rewrites its month: one write), stale ones are deleted
+    if(!social.pmVer){ const st = await F.getDoc(fdoc('profiles', uid, 'meta', 'stats')).catch(() => null); social.pmVer = st && st.exists() && st.data().pm ? { ...st.data().pm } : {}; }
+    const pm = {};
+    try{
+      const bundles = monthBundles(), prev = social.pmVer, writes = [];
+      bundles.forEach((v, id) => { const ver = hashStr(v); pm[id] = ver; if(prev[id] !== ver) writes.push([id, v, ver]); });
+      for(const [id, v, ver] of writes) await F.setDoc(fdoc('profiles', uid, 'meta', id), { v, ver });
+      for(const id of Object.keys(prev)) if(!(id in pm)) await F.deleteDoc(fdoc('profiles', uid, 'meta', id)).catch(() => {});
+      social.pmVer = { ...pm };
+    }catch(e){ console.warn('Publishing month records failed', e); Object.assign(pm, social.pmVer || {}); }   // keep listing what's already there
     const d0 = new Date(); d0.setHours(0,0,0,0);
     const sum = f => plays.filter(f).reduce((t, p) => t + playPL(p), 0), today = plays.filter(p => p.start >= +d0);
     await F.setDoc(fdoc('profiles', uid, 'meta', 'stats'), { n: plays.length, wins: plays.filter(p => p.result === 'cash').length,
       todayW: today.filter(p => p.result === 'cash').length, todayL: today.filter(p => p.result !== 'cash').length,
       all: +sum(() => true).toFixed(4), d30: +sum(p => p.start > now - 30 * 864e5).toFixed(4), today: +sum(p => p.start >= +d0).toFixed(4),
-      periods: lbPeriods(plays, playPL), updated: now });
+      periods: lbPeriods(plays, playPL), pm, updated: now });
   }catch(e){ console.warn('Publishing plays failed', e); }
 }
 
@@ -4227,11 +4253,24 @@ $('#pfpFile').onchange = e => {
 // ----- Viewing a friend: their PNL, History and Alarms open in the usual panels -----
 function viewFriend(uid){
   if(social.view === uid) return;
-  social.viewUnsubs.forEach(u => u()); social.viewUnsubs = []; social.view = uid; social.viewPlays = []; social.viewStats = null;
+  social.viewUnsubs.forEach(u => u()); social.viewUnsubs = []; social.view = uid; social.viewPlays = []; social.viewStats = null; social.viewRecent = []; social.viewPM = new Map();
   const F = fdb(), redraw = () => { renderPnl(); renderHistory(); renderFAlarms(); };
+  // their bets = the month records (whole history) + their recent per-bet records, the recent ones winning where both have a bet
+  const rebuild = () => { const m = new Map(); social.viewPM.forEach(e => e.bets.forEach(b => m.set(b.id, b))); social.viewRecent.forEach(p => m.set(p.id, p)); social.viewPlays = [...m.values()]; };
   social.viewUnsubs.push(F.onSnapshot(fdoc('profiles', uid), snap => { if(snap.exists()) social.cards.set(uid, { uid, ...snap.data() }); redraw(); renderFriends(); }));   // live: name, picture, sharing
-  social.viewUnsubs.push(F.onSnapshot(F.collection(sync.fb.db, 'profiles', uid, 'plays'), snap => { social.viewPlays = snap.docs.map(d => ({ id:d.id, ...d.data() })); redraw(); }));
-  social.viewUnsubs.push(F.onSnapshot(fdoc('profiles', uid, 'meta', 'stats'), snap => { social.viewStats = snap.exists() ? snap.data() : null; redraw(); }));
+  social.viewUnsubs.push(F.onSnapshot(F.collection(sync.fb.db, 'profiles', uid, 'plays'), snap => { social.viewRecent = snap.docs.map(d => ({ id:d.id, ...d.data() })); rebuild(); redraw(); }));
+  social.viewUnsubs.push(F.onSnapshot(fdoc('profiles', uid, 'meta', 'stats'), snap => {
+    social.viewStats = snap.exists() ? snap.data() : null;
+    const pm = (social.viewStats && social.viewStats.pm) || {};
+    [...social.viewPM.keys()].forEach(id => { if(!(id in pm)) social.viewPM.delete(id); });   // months that no longer exist
+    Object.keys(pm).filter(id => (social.viewPM.get(id) || {}).ver !== pm[id]).forEach(async id => {   // new or changed months: read just those
+      try{
+        const d = await F.getDoc(fdoc('profiles', uid, 'meta', id)); if(social.view !== uid || !d.exists()) return;
+        social.viewPM.set(id, { ver: pm[id], bets: JSON.parse(d.data().v) }); rebuild(); redraw();
+      }catch(e){ console.warn('Couldn\'t read a month of their results', e); }
+    });
+    rebuild(); redraw();
+  }));
 }
 function stopViewing(){
   social.viewUnsubs.forEach(u => u()); social.viewUnsubs = []; social.view = null; social.viewPlays = [];
