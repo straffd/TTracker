@@ -3017,8 +3017,11 @@ function renderCalendar(view, days, tk){
   if(sel){
     const list = document.createElement('div'); list.className = 'daylist';
     const h = document.createElement('h4');
-    h.textContent = (whole ? new Date(m0).toLocaleDateString([], { month:'long', year:'numeric' }) + ` · ${mp.length} bet${mp.length === 1 ? '' : 's'}`
-      : keyDate(pnlSel).toLocaleDateString([], { weekday:'long', day:'numeric', month:'long' })) + ` · ${S.txt(sel.pl)}`; list.appendChild(h);
+    // "12 bets": bets placed (a match with several bets from + counts each; "(4 matches)" is added when that differs)
+    const nBets = sel.plays.reduce((t, p) => t + (Array.isArray(p.bets) && p.bets.length ? p.bets.length : 1), 0);
+    const count = `${nBets} bet${nBets === 1 ? '' : 's'}` + (nBets !== sel.plays.length ? ` (${sel.plays.length} match${sel.plays.length === 1 ? '' : 'es'})` : '');
+    h.textContent = (whole ? new Date(m0).toLocaleDateString([], { month:'long', year:'numeric' })
+      : keyDate(pnlSel).toLocaleDateString([], { weekday:'long', day:'numeric', month:'long' })) + ` · ${count} · ${S.txt(sel.pl)}`; list.appendChild(h);
     if(whole && !mp.length) list.appendChild(el('div', 'empty', 'No settled bets this month yet.'));
     sel.plays.slice().sort((a, b) => a.start - b.start).forEach(p => {
       const it = document.createElement('div'), pl = S.val(p); it.className = 'it';
