@@ -50,7 +50,7 @@ Screenshots are read by Google Gemini (free tier).
    Under it, Play types, Games played and Time played have an
    **All | Czech Liga | TT Elite | TT Cup** switch to see them for just one of those competitions (also remembered).
    Opening a calendar day (or This month) hides Play types so that day's bets show in its place. Mark a bet as Sweep with the **SWEEP** tag (click the bet, or type `sweep` in a typed bet), or in the Cash / Chalk
-   popup (**Play type**), which also fixes the type of a history entry. Click a day, or the **This month** box, to list those bets.
+   popup (**Play type**), which also fixes the type of a history entry. Click a day, or the **This month** box, to list those bets; the heading shows the date, the number of bets placed and the profit (e.g. "Sunday, October 18 · 5 bets · +1.6u").
     **Tag while you send:** write something like "tag all these with Strong" or "tag these as live and value" with your
     screenshots and every bet from that send gets those tags (new names become new tags; bets already in your list get them too).
     Sending a screenshot of a bet you already have can add tags from the photo (see Bot picks below) but never removes any; add
