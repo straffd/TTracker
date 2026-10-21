@@ -231,6 +231,9 @@ html:not(.phone) .log{--fade-top:calc(34px * var(--pls, 1));--fade-len:30px}
 #plVal.down,#plMe.down,#plBot.down{color:var(--red)}
 /* Cash / Chalk on finished alarms */
 .settle{display:flex;gap:6px;align-self:center}
+.prewrap{display:flex;align-items:center;gap:10px;align-self:center}
+.prewrap .place{font:600 12px/1 var(--cond);letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;border-radius:6px;background:transparent;color:var(--accent,var(--brand));border:1px solid var(--accent,var(--brand));cursor:pointer}
+.card.placed{outline:2px solid var(--accent,var(--brand));outline-offset:-2px}
 .settle button{font:700 13px/1 var(--cond);letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:6px 10px;border:1px solid currentColor;background:none}
 .settle .cash{color:var(--green)}
 .settle .cash:hover{background:color-mix(in srgb,var(--green) 16%,transparent)}
@@ -434,7 +437,8 @@ button.tag{cursor:pointer}
 #bets .list{container-type:inline-size}
 @container (max-width:330px){
   #bets .card .settle{grid-column:1/-1;justify-self:start}
-  #bets .card .count{grid-column:1/-1;justify-self:start}
+  #bets .card .count{grid-column:auto}
+  #bets .card .prewrap{grid-column:1/-1;justify-self:start}
 }
 .pnl{position:absolute;top:0;bottom:0;right:0;width:min(560px,100%);z-index:7;background:var(--panel);border-left:1px solid var(--line);
   box-shadow:-12px 0 32px rgba(0,0,0,.4);display:flex;flex-direction:column;transform:translateX(calc(100% + 40px));visibility:hidden;transition:transform .3s ease,visibility 0s .3s,right .25s}
@@ -2186,13 +2190,13 @@ function render(){
   if(!vis.length){ list.innerHTML = alarms.length ? '<div class="empty">Your bets are all in leagues you\'ve switched off. Turn them back on in ⚙ Settings → League Links.</div>' : '<div class="empty">No bets yet. Send a match screenshot in the chat to add one.</div>'; return; }
   for(const a of vis){
     const c = document.createElement('div');
-    c.className = `card ${a.side.toLowerCase()}${a.fired?' fired':''}${ringing.has(a.id)?' ringing':''}`;
+    c.className = `card ${a.side.toLowerCase()}${a.fired?' fired':''}${a.placed?' placed':''}${ringing.has(a.id)?' ringing':''}`;
     c.tabIndex = 0; c.setAttribute('role','button'); c.setAttribute('aria-label', `${a.name}, open screenshot`);
     c.innerHTML = `
       <button class="names" title="Open the league's link"></button>
       ${a.league ? '<div class="comp"></div>' : ''}
       <div class="when"><span class="wt"><b>${fmtTime(a.start)}</b> ${fmtDay(a.start)}${a.from ? ' · from @' + a.from : ''}${a.manual && !a.test ? ' · <span class="typed" title="Typed in the chat: friends can\'t copy it">typed</span>' : ''}</span></div>
-      ${ringing.has(a.id) ? '<button class="stop count">Stop alarm</button>' : a.fired ? '<div class="settle"><button class="cash" title="It hit: record the win">Cash</button><button class="chalk" title="It lost: record the loss">Chalk</button><button class="more" title="More than one bet on this match: record each one">+</button></div>' : `<div class="count" data-count="${a.id}">${countdown(a.ring)}</div>`}
+      ${ringing.has(a.id) ? '<button class="stop count">Stop alarm</button>' : a.fired ? '<div class="settle"><button class="cash" title="It hit: record the win">Cash</button><button class="chalk" title="It lost: record the loss">Chalk</button><button class="more" title="More than one bet on this match: record each one">+</button></div>' : `<div class="prewrap"><div class="count" data-count="${a.id}">${countdown(a.ring)}</div><button class="place" title="Already placed: skip the alarm and record the result now">Place</button></div>`}
       <div class="row">
         <button class="side ${a.side.toLowerCase()}" title="Switch over/under">${a.side}</button>
         <span class="tags"></span>
@@ -2206,6 +2210,11 @@ function render(){
       c.querySelector('.chalk').onclick = e => { e.stopPropagation(); settle(a, 'chalk', null, unitsFor(a)); };
       c.querySelector('.more').onclick = e => { e.stopPropagation(); openSettle({ alarm:a, result:'cash', multi:true }); };
     }
+    const pl = c.querySelector('.place');
+    if(pl) pl.onclick = e => {   // placed: no alarm, straight to the Cash / Chalk screen
+      e.stopPropagation(); a.placed = true; a.fired = true; store.set('tt.alarms', alarms); render();
+      openSettle({ alarm:a, result:'cash' });
+    };
     c.querySelector('.names').onclick = e => { e.stopPropagation(); if(ringing.has(a.id)) stopAlarm(a.id); openLadbrokes(a); };
     if(a.league) c.querySelector('.comp').textContent = a.league;
     c.querySelector('.line').textContent = [fixOuLine(a.line, a.ouPct, a.h2h), a.ouPct].filter(Boolean).join(' · ');
