@@ -2514,6 +2514,7 @@ function settle(a, result, odds, units, bets){
 // Popup: new cash from an alarm, or edit any history entry
 let settling = null;   // { alarm } for a new record, or { play } when editing; bets is set when recording several bets
 function openSettle({ alarm, play, result, multi }){
+  if(play) play = plays.find(x => x.id === play.id) || play;   // the list on screen can hold an older copy (after a sync); always edit the live entry
   settling = { alarm, play, result: play ? play.result : result, bets: null };
   const src = play || alarm;
   settling.side = playType(src); showType();
