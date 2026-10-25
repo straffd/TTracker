@@ -2593,6 +2593,7 @@ $('#pickChalk').onclick = () => pickResult('chalk');
 $('#settleOdds').oninput = settleProfit; $('#settleUnits').oninput = settleProfit;
 [$('#settleOdds'), $('#settleUnits')].forEach(i => i.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); $('#settleSave').click(); } });
 $('#settleSave').onclick = () => {
+  if(settling.play) settling.play = plays.find(x => x.id === settling.play.id) || settling.play;   // a sync may have replaced the list while this was open: save into the live entry
   applyType();
   if(settling.bets) return saveBets();
   const odds = +$('#settleOdds').value, units = +$('#settleUnits').value, r = settling.result;
@@ -2628,7 +2629,7 @@ function saveBets(){
 $('#settleDelete').onclick = () => {
   if(!settling.play) return;
   store.set('tt.histDel', [...new Set([...(store.get('tt.histDel', []) || []), settling.play.id])]);   // deleted on purpose: synced as deleted
-  plays = plays.filter(p => p !== settling.play); closeModal($('#settleModal')); savePlays();
+  plays = plays.filter(p => p.id !== settling.play.id); closeModal($('#settleModal')); savePlays();
 };
 function renderHistory(){
   if(!$('#hist').classList.contains('open')) return;
