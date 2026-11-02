@@ -1548,6 +1548,8 @@ Return ONLY a JSON object, no markdown, in this shape:
   "player1": "top player of the row exactly as shown, e.g. Minda M.",
   "player2": "bottom player of the row exactly as shown",
   "time": "the match start time exactly as shown, keeping AM or PM, e.g. 4:35 PM (or 16:35 if the screen itself shows 24-hour times). Never drop the PM: 4:35 PM is not 4:35",
+  "in_mins": "a countdown such as \"in 60 mins\" or \"in 1 hour\" shown on the card, as total minutes (60), else null. It is not the start time",
+  "posted": "the time shown at the top left of a pasted Discord card next to the @sender (e.g. 6:45 PM in \"6:45 PM @Table Tennis\"), keeping AM or PM, else null. For a card with no clock time inside it, THIS is the match start time",
   "ampm": "AM or PM as shown next to the time, or null if the time is written in 24-hour form",
   "ou_line": "the O/U value as overs/unders, two whole numbers with a slash, copied digit for digit, e.g. 4/12 (from \"4/12 · 25%\") or 36/20 (from \"36O·20U\")",
   "h2h": "the number next to H2H, e.g. 56, or null if the row has none",
@@ -1571,7 +1573,8 @@ Keep each row's values together: never take a value from a neighbouring row.
 Do not confuse other percentages (H2H, SWEEP, SPLIT, 5-SET, O18.5, OT) with the edge. The edge is the lone percentage below the small horizontal bar.
 The date shown under "pts" is NOT the match date; ignore it.
 A match CARD (one match, no table) looks like: a header "TT ELITE SERIES · 3:55 AM" (competition · start time), the two players with VS between them,
-then WAGER (e.g. "UNDER 1u") and RECORD (e.g. "15/20 (75%)"). For a card: league and time come from the header, wager and record as shown,
+then WAGER (e.g. "UNDER 1u") and RECORD (e.g. "15/20 (75%)"). A card may show only a countdown (e.g. "in 60 mins") instead of a clock time: then time is null and the match starts at the posted time next to @sender (leave the countdown in in_mins; do not add it to anything).
+For a card: league and time come from the header, wager and record as shown,
 ou_side is the side named in the WAGER (UNDER or OVER, whatever its colour), and edge, ou_line, ou_pct, ou_color and h2h are null when not shown.
 If the image shows no table tennis match rows or card, return {"error":"short reason"}.`;
 
@@ -1686,8 +1689,15 @@ function tzOffset(tz, t){
          .formatToParts(new Date(t)).map(x => [x.type, x.value]));
        return Math.round((Date.UTC(+p.year, p.month - 1, +p.day, +p.hour % 24, +p.minute) - t) / 6e4); }catch(e){ return null; }
 }
+// A Discord card with no clock time in it: the time next to @sender (e.g. "6:45 PM @Table Tennis") is the start; "in 60 mins" is just a countdown to it
+function relStart(info){
+  const hm = to24(info.posted);
+  if(hm){ const d = new Date(); d.setHours(hm[0], hm[1], 0, 0); return d.getTime(); }
+  const rel = +info.in_mins;   // no time visible at all: the countdown counted from now
+  return rel > 0 && rel <= 24 * 60 ? Math.round((Date.now() + rel * 6e4) / 6e4) * 6e4 : null;
+}
 function matchStart(info){
-  const hm = to24(info.time, info.ampm); if(!hm) return null;
+  const hm = to24(info.time, info.ampm); if(!hm) return relStart(info);
   const off = tzOffset(info.tz, Date.now());
   if(off != null && off !== -new Date().getTimezoneOffset()){   // another timezone: that day's clock time there, as a moment
     const z = new Date(Date.now() + off * 6e4);
