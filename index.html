@@ -582,6 +582,7 @@ button.tag{cursor:pointer}
 .up{color:var(--green)} .down{color:var(--red)}
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .cal-nav b{font:600 16px var(--cond)}
+.cal-nav .mtotal{margin-left:10px;font-weight:700}
 .cal-nav button{background:none;border:1px solid var(--line);border-radius:6px;width:30px;height:28px;color:var(--text)}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cal .dow{font-size:11px;color:var(--muted);text-align:center;padding-bottom:2px}
@@ -3008,11 +3009,14 @@ function renderCalendar(view, days, tk){
   nav.innerHTML = `<button aria-label="Previous month">‹</button><b>${pnlMonth.toLocaleDateString([], { month:'long', year:'numeric' })}</b><button aria-label="Next month">›</button>`;
   nav.children[0].onclick = () => { pnlMonth = new Date(y, m - 1, 1); pnlSel = null; renderPnl(); };
   nav.children[2].onclick = () => { pnlMonth = new Date(y, m + 1, 1); pnlSel = null; renderPnl(); };
-  view.appendChild(nav);
   const grid = document.createElement('div'); grid.className = 'cal';
   ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => { const e = document.createElement('div'); e.className = 'dow'; e.textContent = d; grid.appendChild(e); });
   const lead = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
   const monthVals = [...Array(n)].map((_, i) => (days.get(dayKey(new Date(y, m, i + 1))) || {}).pl || 0), maxAbs = Math.max(1e-9, ...monthVals.map(Math.abs));
+  // a finished month shows its total next to the title
+  if(new Date(y, m + 1, 1) <= now){ const tot = monthVals.reduce((t, v) => t + v, 0), ms = el('span', 'mtotal ' + plClass(tot), S.txt(tot));
+    ms.title = 'Total for the month'; nav.children[1].appendChild(ms); }
+  view.appendChild(nav);
   for(let i = 0; i < lead; i++){ const b = document.createElement('div'); b.className = 'day blank'; grid.appendChild(b); }
   const uvDays = S.own ? unitChanges() : new Map();   // your own unit size changes: never shown on a friend's PNL
   for(let d = 1; d <= n; d++){

@@ -43,6 +43,7 @@ Screenshots are read by Google Gemini (free tier).
    matches) or a **Graph** (running total over 7, 30, 90 days or all time). Switch between **All**, **Personal** and **Bot** at the top:
    under All, totals and calendar days are combined (hover over one to split it into Me and Bot); Personal and Bot show
    only those plays. The **Calendar / Graph** switch sits just above the calendar or graph.
+   Once a month is over, its **total** (e.g. +12.4u) is shown beside the month's name above the calendar (the current month doesn't show one until it ends).
    Under it, **Play types** shows bets, W–L, win rate, P/L and ROI for Over, Under, Sweep and Overcommit (Bot shows no Sweep or Overcommit: they're always Personal) (also split by All / Personal /
    Bot); click any types for a bigger breakdown, as many open as you like (P/L in units and $, ROI, win rate, record, units staked, pending bets, average
    odds). A switch beside the heading changes the breakdown to **Competitions** (each competition, most bets first; TT Cup, TT Elite Series and Czech Liga Pro are grouped however the screenshot spells them, e.g. TT Elite = TT Elite Series) or
