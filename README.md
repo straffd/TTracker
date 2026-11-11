@@ -63,6 +63,7 @@ Screenshots are read by Google Gemini (free tier).
     **Bot units** (Settings → Betting): switch it on and set a unit size, and bets tagged Bot start with those units
     (Cash / Chalk buttons and the Cash popup) instead of your last-used units, without changing your last-used units.
    **Typed bets** carry everything a screenshot does: `A Wiecek vs B Sec TT Elite OVER Bot Sweep`, or with more detail
+   **Dates:** write the day after the bet to put the game on that date, e.g. `... 7:30pm 15 Nov`, `Nov 15th 2026`, `15/11/2026` (day first), `2026-11-15`, `tomorrow`, `friday`, or `on 15/11` (a plain `22/6` is the O/U line, so a short day/month needs the word "on"). Without a date it's today (or the next time that clock time comes).
    `Byrtus S vs Heczko M 9:30pm Czech Liga Pro OVER 22/6 79% edge 54% h2h 28 1u Bot` (competition, OVER/UNDER, O/U as `22/6` or
    `36O 20U`, the O/U %, `edge 54%`, `h2h`, a stake like `1u`, tags by name). A time is optional: without one the bet is added as
    already started (no alarm) so you can Cash / Chalk it; a message needs at least one bet detail, so ordinary chat is never a bet.

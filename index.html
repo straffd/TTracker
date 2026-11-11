@@ -1699,7 +1699,10 @@ function relStart(info){
 }
 function matchStart(info){
   const hm = to24(info.time, info.ampm); if(!hm) return relStart(info);
-  const off = tzOffset(info.tz, Date.now());
+  const off = tzOffset(info.tz, Date.now()), D = info.date;   // D: a date written with the bet, [year, month0, day]
+  if(D && off != null && off !== -new Date().getTimezoneOffset()){
+    let t = Date.UTC(D[0], D[1], D[2], hm[0], hm[1]) - off * 6e4; const o2 = tzOffset(info.tz, t); if(o2 != null && o2 !== off) t -= (o2 - off) * 6e4; return t; }
+  if(D) return new Date(D[0], D[1], D[2], hm[0], hm[1], 0, 0).getTime();
   if(off != null && off !== -new Date().getTimezoneOffset()){   // another timezone: that day's clock time there, as a moment
     const z = new Date(Date.now() + off * 6e4);
     let t = Date.UTC(z.getUTCFullYear(), z.getUTCMonth(), z.getUTCDate(), hm[0], hm[1]) - off * 6e4;
@@ -2037,6 +2040,31 @@ const TYPED_LEAGUES = [[/(?:^|[\s,(])tt\s*cup(?=$|[\s,):;])/i, 'TT Cup'], [/(?:^
   [/(?:^|[\s,(])(?:czech\s*)?liga(?:\s*pro)?(?=$|[\s,):;])/i, 'Czech Liga Pro'], [/(?:^|[\s,(])setka\s*cup(?=$|[\s,):;])/i, 'Setka Cup']];   // the competitions the links and filters know
 const TIME_RE = /(?:^|[\s@,(])(?:at\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?(?=$|[\s,)])/i;
 const PAIR_RE = /\s(?:vs\.?|v\.?|versus|-|—|–)\s/i;
+// A date written after a bet: "12 Nov", "Nov 12th 2026", "12/11/2026" (day first), "2026-11-12", "tomorrow", "friday", "on 12/11".
+// Returns the line without it and [year, month0, day]. A plain "12/11" is the O/U line unless it follows "on".
+const MONTHS = 'jan feb mar apr may jun jul aug sep oct nov dec'.split(' '), WEEKDAYS = 'sunday monday tuesday wednesday thursday friday saturday'.split(' ');
+function takeDate(line){
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const mon = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+  const fix = (y, m, d, explicitYear) => {
+    if(m < 0 || m > 11 || d < 1 || d > 31) return null;
+    if(y < 100) y += 2000;
+    if(!explicitYear){ y = today.getFullYear(); if(new Date(y, m, d) < new Date(today.getTime() - 180 * 864e5)) y++; }   // "5 Jan" in December means next January
+    const t = new Date(y, m, d); return t.getMonth() === m ? [y, m, d] : null;
+  };
+  const tries = [
+    [/(^|[\s,(])(?:on\s+)?(\d{4})-(\d{1,2})-(\d{1,2})(?=$|[\s,)])/i, m => fix(+m[2], +m[3] - 1, +m[4], true)],
+    [/(^|[\s,(])(?:on\s+)?(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})(?=$|[\s,)])/i, m => fix(+m[4], +m[3] - 1, +m[2], true)],
+    [new RegExp(`(^|[\\s,(])(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${mon}\\.?(?:,?\\s+(\\d{4}))?(?=$|[\\s,)])`, 'i'), m => fix(+m[4] || 0, MONTHS.indexOf(m[3].slice(0, 3).toLowerCase()), +m[2], !!m[4])],
+    [new RegExp(`(^|[\\s,(])(?:on\\s+)?${mon}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?(?=$|[\\s,)])`, 'i'), m => fix(+m[4] || 0, MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()), +m[3], !!m[4])],
+    [/(^|[\s,(])on\s+(\d{1,2})\/(\d{1,2})(?=$|[\s,)])/i, m => fix(0, +m[3] - 1, +m[2], false)],
+    [/(^|[\s,(])(?:on\s+)?(today|tonight|tomorrow|tmrw|tmr|yesterday)(?=$|[\s,)])/i, m => { const k = m[2].toLowerCase(), d = new Date(today); d.setDate(d.getDate() + (/^t[mo]/.test(k) && k !== 'today' && k !== 'tonight' ? 1 : k === 'yesterday' ? -1 : 0)); return [d.getFullYear(), d.getMonth(), d.getDate()]; }],
+    [new RegExp(`(^|[\\s,(])(?:on\\s+)?(${WEEKDAYS.join('|')})(?=$|[\\s,)])`, 'i'), m => { const d = new Date(today); d.setDate(d.getDate() + (WEEKDAYS.indexOf(m[2].toLowerCase()) - d.getDay() + 7) % 7); return [d.getFullYear(), d.getMonth(), d.getDate()]; }],
+    [new RegExp(`(^|[\\s,(])on\\s+(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?=$|[\\s,)])`, 'i'), m => { const i = WEEKDAYS.findIndex(w => w.startsWith(m[2].slice(0, 3).toLowerCase())), d = new Date(today); d.setDate(d.getDate() + (i - d.getDay() + 7) % 7); return [d.getFullYear(), d.getMonth(), d.getDate()]; }],
+  ];
+  for(const [re, f] of tries){ const m = line.match(re); if(!m) continue; const d = f(m); if(d) return { line: line.replace(re, '$1 '), date: d }; }
+  return { line, date: null };
+}
 function parseTypedBets(text){
   const out = [], hasTime = l => { const m = l.match(TIME_RE); return !!(m && (m[2] != null || m[3])); };
   const lines = String(text).split(/\n+/).map(l => l.trim()).filter(Boolean);
@@ -2045,8 +2073,9 @@ function parseTypedBets(text){
   for(const raw of lines){
     // The details a screenshot has, written in the message: O/U ("22/6", "36O 20U"), %, edge, H2H, competition, stake, side, tags
     let ouLine = null, h2h = null, edge = null, league = '', wager = null;
+    const dt = takeDate(raw), date = dt.date;
     // letter format "36O 20U" / "36O·20U" (or a misread "360·20U"): needs the letter O or a "·", so "h2h 27 1u" isn't one
-    const noLetterOU = raw.replace(/(^|[\s,(])(\d{1,4})\s*(?:(O)\s*[·•∙.\-\/,:\s]*|[·•∙]\s*)(\d{1,3})\s*U(?=$|[\s,)])/i, (w, pre, a, o, b) => { ouLine = `${a}${o ? 'O' : ''}·${b}U`; return pre + ' '; });
+    const noLetterOU = dt.line.replace(/(^|[\s,(])(\d{1,4})\s*(?:(O)\s*[·•∙.\-\/,:\s]*|[·•∙]\s*)(\d{1,3})\s*U(?=$|[\s,)])/i, (w, pre, a, o, b) => { ouLine = `${a}${o ? 'O' : ''}·${b}U`; return pre + ' '; });
     let line = noLetterOU.replace(/[|·•∙]/g, ' ').replace(/\(\s*\d+\s*min(?:ute)?s?\s*\)/ig, ' ').replace(/\s[—–]\s/g, ' vs ').trim(); if(!line) continue;
     line = line.replace(/\bo\/u\b\s*:?/i, ' ');
     if(!ouLine) line = line.replace(/(^|[\s,(])(\d{1,3})\s*\/\s*(\d{1,3})(?=$|[\s,)%·])/, (w, pre, a, b) => { ouLine = `${a}/${b}`; return pre + ' '; });   // 22/6
@@ -2070,7 +2099,8 @@ function parseTypedBets(text){
       h = +tm[1]; min = tm[2] != null ? +tm[2] : 0; const ap = tm[3] ? tm[3].replace(/\./g, '').toLowerCase() : '';
       if(h > 23 || min > 59 || (ap && (h < 1 || h > 12))) continue;
       if(ap === 'pm' && h < 12) h += 12; if(ap === 'am' && h === 12) h = 0;
-      if(!ap && h < 12){   // no am/pm: take whichever of morning / evening comes next (or has just started)
+      const todayDate = !date || (date[0] === new Date().getFullYear() && date[1] === new Date().getMonth() && date[2] === new Date().getDate());
+      if(!ap && h < 12 && todayDate){   // no am/pm: take whichever of morning / evening comes next (or has just started)
         const t = new Date(); t.setHours(h, min, 0, 0);
         if(t.getTime() < Date.now() - 30 * 6e4) h += 12;
       }
@@ -2093,8 +2123,8 @@ function parseTypedBets(text){
     const p1 = nm(parts[0]), p2 = nm(parts[1]);
     if(!p1 || !p2 || p1.length > 40 || p2.length > 40) continue;
     // no time: only a bet if the message gives other bet details (so "Messi vs Ronaldo" in plain chat isn't one); it's added as already started
-    if(h == null && !(league || side || tagIds.length || ouLine || edge != null || wager || h2h)) continue;
-    out.push({ p1, p2, time: h == null ? null : `${h}:${String(min).padStart(2, '0')}`, side, tags: tagIds, ...(wager ? { wager } : {}), ...(tz ? { tz } : {}),
+    if(h == null && !(date || league || side || tagIds.length || ouLine || edge != null || wager || h2h)) continue;
+    out.push({ p1, p2, time: h == null ? null : `${h}:${String(min).padStart(2, '0')}`, ...(date ? { date } : {}), side, tags: tagIds, ...(wager ? { wager } : {}), ...(tz ? { tz } : {}),
       ...(league ? { league } : {}), ...(ouLine ? { ouLine } : {}), ...(ouPct ? { ouPct } : {}), ...(edge != null ? { edge } : {}), ...(h2h ? { h2h } : {}) });
   }
   return out;
@@ -2102,14 +2132,14 @@ function parseTypedBets(text){
 function addTypedBets(list){
   const made = [], skipped = [];
   for(const t of list){
-    const name = `${t.p1} vs ${t.p2}`, noTime = !t.time, start = noTime ? Date.now() : matchStart({ time: t.time, tz: t.tz });
+    const name = `${t.p1} vs ${t.p2}`, noTime = !t.time, start = noTime ? (t.date ? new Date(t.date[0], t.date[1], t.date[2], 12).getTime() : Date.now()) : matchStart({ time: t.time, tz: t.tz, date: t.date });
     // no time written: the same players within a day count as the same match
-    const same = x => noTime ? Math.abs(x.start - Date.now()) < 20 * 36e5 && sameMatch(x.name, x.start, name, x.start) : sameMatch(x.name, x.start, name, start);
+    const same = x => noTime && !t.date ? Math.abs(x.start - Date.now()) < 20 * 36e5 && sameMatch(x.name, x.start, name, x.start) : sameMatch(x.name, x.start, name, start);
     if(alarms.some(same) || plays.some(same)){ skipped.push(name); continue; }
     const line = t.ouLine ? fixOuLine(t.ouLine, t.ouPct, t.h2h) : '';
     const a = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, start, ring: start - lead * 60000, lead,
                 side: t.side, line, ouPct: t.ouPct || ouPctOf(line), edge: t.edge ?? null, league: t.league || '', img:'', fired: start <= Date.now(), added: Date.now(), tags: t.tags || [], manual:true,
-                ...(t.h2h ? { h2h: t.h2h } : {}), ...(t.wager ? { wager: t.wager } : {}), ...(t.tz ? { tzFrom: `${t.time} ${t.tz}` } : {}), ...(noTime ? { noTime:true } : {}) };
+                ...(t.h2h ? { h2h: t.h2h } : {}), ...(t.wager ? { wager: t.wager } : {}), ...(t.tz ? { tzFrom: `${t.time} ${t.tz}` } : {}), ...(noTime && !t.date ? { noTime:true } : {}) };
     if(a.tags.includes('bot')) ensureBotTag();
     alarms.push(a); made.push(a);
   }
