@@ -448,14 +448,13 @@ button.tag{cursor:pointer}
 .fullslide{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;background:transparent;transform:translateY(-100%);visibility:hidden;transition:transform .3s ease,visibility 0s .3s,margin-right .25s}
 .fullslide.open{transform:none;visibility:visible;transition:transform .3s ease,visibility 0s,margin-right .25s}
 .main.pnl-open .fullslide{margin-right:var(--pnl-w,0px)}
-.fullslide header{display:flex;align-items:center;gap:12px;padding:62px 24px 10px;border-bottom:1px solid var(--line)}
-.fullslide h3{margin:0;font:600 20px var(--cond);flex:1}
-.fullslide .fs-body{flex:1;overflow:auto;padding:16px 24px}
+.fullslide h3{margin:0;padding:10px 24px 18px;font:600 20px var(--cond)}   /* the title sits at the bottom left, where the message box is */
+.fullslide .fs-body{flex:1;overflow:auto;padding:62px 24px 16px}
 .chat .log,.chat .composer{transition:margin-right .25s,opacity .2s}
 .chat.fs-open .log,.chat.fs-open .composer{opacity:0;pointer-events:none;visibility:hidden;transition:margin-right .25s,opacity .2s,visibility 0s .2s}
 @media (prefers-reduced-motion:reduce){.fullslide{transition:none}}
-html.phone .fullslide header{padding:calc(var(--top-h) + 8px) 14px 10px}
-html.phone .fullslide .fs-body{padding:14px}
+html.phone .fullslide .fs-body{padding:calc(var(--top-h) + 14px) 14px 14px}
+html.phone .fullslide h3{padding:10px 14px calc(14px + env(safe-area-inset-bottom))}
 html.phone .main.pnl-open .fullslide{margin-right:0}
 .pnl .hsum{color:var(--muted);font-size:13px}
 .histlist{display:flex;flex-direction:column;gap:10px}
@@ -839,11 +838,8 @@ html.phone .alpha-note{display:inline}
   <section class="chat">
     <div class="chatbg" aria-hidden="true"></div>
     <section class="fullslide" id="matches" aria-labelledby="matchesTitle" aria-hidden="true">
-      <header>
-        <h3 id="matchesTitle">Matches</h3>
-        <button class="close" id="matchesClose" aria-label="Close matches" title="Close (Esc)">×</button>
-      </header>
       <div class="fs-body" id="matchesBody"><div class="empty">Matches will show here.</div></div>
+      <h3 id="matchesTitle">Matches</h3>
     </section>
     <button class="keycta" id="keyCta" hidden>Gemini settings: add your API key</button>
     <div class="pltab" id="plTab"><div class="pltab-in">
@@ -2872,14 +2868,12 @@ function layoutSlides(){
 }
 const pnlShift = layoutSlides;
 addEventListener('resize', layoutSlides);
-// Matches: covers the whole page; Esc or × closes it
+// Matches: replaces the chat; the Matches button again, or Esc, closes it
 function setMatches(open){
   const el = $('#matches'); el.classList.toggle('open', open); el.setAttribute('aria-hidden', !open); $('.chat').classList.toggle('fs-open', open);
   $('#matchesBtn').setAttribute('aria-expanded', open); $('#matchesBtn').setAttribute('aria-pressed', open);
-  if(open) $('#matchesClose').focus();
 }
 $('#matchesBtn').onclick = () => setMatches(!$('#matches').classList.contains('open'));
-$('#matchesClose').onclick = () => setMatches(false);
 addEventListener('keydown', e => { if(e.key === 'Escape' && $('#matches').classList.contains('open')) setMatches(false); });
 $('#betsBtn').onclick = () => setSlide('bets', !$('#bets').classList.contains('open'));
 $('#betsClose').onclick = () => setSlide('bets', false);
