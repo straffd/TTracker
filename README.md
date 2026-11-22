@@ -77,6 +77,7 @@ Screenshots are read by Google Gemini (free tier).
     Sending a screenshot of a bet you already have only ever adds tags: Bot if the new photo's row is yellow, SWEEP if you
     write "sweep" with it. A photo without the yellow row never removes Bot (click the tag to remove it yourself).
 11. In ⚙ Settings you can also add your own alarm sound (**Add sound…**, audio up to 1 MB, kept on this device)
+    Browsers keep sound blocked until the page gets a click, tap or key press (for example right after the app reloaded itself to update). While that's the case and a bet is coming up, a red note says so; clicking or tapping anywhere switches the sound on, and an alarm that's already ringing starts sounding at once.
     and set the background picture's **blur** and **saturation**. With a background picture, everything in the main
     colour (normally blue: buttons, the edge % and its bar, sliders, the $ | U switch, focus rings, highlights) takes on its colour. The background can also be an animated **GIF** (up to 8 MB) or a short **video**
     (MP4 or WebM, up to 25 MB) that plays muted on a loop under the same blur and tint. These are kept in the browser's
