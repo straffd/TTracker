@@ -78,6 +78,7 @@ Screenshots are read by Google Gemini (free tier).
     write "sweep" with it. A photo without the yellow row never removes Bot (click the tag to remove it yourself).
 11. In ⚙ Settings you can also add your own alarm sound (**Add sound…**, audio up to 1 MB, kept on this device)
     Alarms are checked by a timer that runs outside the page (a Web Worker), because browsers slow a background tab's own timers to about once a minute, which made alarms ring up to a minute late. Coming back to the tab checks straight away. If the browser puts the tab to sleep altogether (Chrome Memory Saver, Edge sleeping tabs), only a notification can reach you: keep **Notifications on this device** on and allowed, and add this site to the browser's "always keep active" list.
+    Browsers keep sound blocked until the page gets a click, tap or key press (for example right after the app reloaded itself to update). While that's the case and a bet is coming up, a red note says so; clicking or tapping anywhere switches the sound on, and an alarm that's already ringing starts sounding at once.
     and set the background picture's **blur** and **saturation**. With a background picture, everything in the main
     colour (normally blue: buttons, the edge % and its bar, sliders, the $ | U switch, focus rings, highlights) takes on its colour. The background can also be an animated **GIF** (up to 8 MB) or a short **video**
     (MP4 or WebM, up to 25 MB) that plays muted on a loop under the same blur and tint. These are kept in the browser's
