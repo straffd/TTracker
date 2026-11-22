@@ -115,6 +115,8 @@ button{cursor:pointer}
 .card button.names{background:none;border:none;padding:0 22px 0 0;margin:0;text-align:left;color:inherit;cursor:pointer;justify-self:start}
 .card button.names:hover{text-decoration:underline;text-underline-offset:3px}
 .card button.names::after{content:"\00a0↗";font-size:13px;color:var(--muted)}
+.soundlock{position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:90;max-width:calc(100vw - 24px);padding:9px 14px;border-radius:8px;background:var(--panel-2);border:1px solid var(--red);color:var(--text);font:600 13px var(--sans);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.soundlock[hidden]{display:none}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(10px);background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:9px 14px;border-radius:8px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:60}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ghost.iconbtn{width:38px;height:38px;padding:0;display:grid;place-items:center}
@@ -1054,6 +1056,7 @@ html.phone .alpha-note{display:inline}
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<button class="soundlock" id="soundLock" hidden>🔇 Alarm sound is blocked by the browser. Click or tap anywhere to turn it on.</button>
 
 <!-- First-time tutorial: setup (Gemini key, league links) then a tour that spotlights each part of the site -->
 <div class="tour" id="tour" hidden>
@@ -3317,7 +3320,7 @@ $('#soundDel').onclick = () => {
 
 function ctx(){
   audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-  if(audioCtx.state==='suspended') audioCtx.resume();
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(() => {});
   return audioCtx;
 }
 let loopOut = null;   // while an alarm rings, its notes go through this node so they can be cut off instantly
@@ -3378,7 +3381,21 @@ $('#clearAll').onclick = () => {
   alarms = []; store.set('tt.alarms', alarms); render(); resetClearBtn();
   addMsg('bot', `Cleared ${n} bet${n>1?'s':''}.`);
 };
-document.addEventListener('click', () => { if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }, { once:true });
+/* Browsers keep sound blocked until the page gets a tap, click or key press. After a reload (e.g. the app updating itself)
+   nothing has been pressed yet, so an alarm would ring silently. Any press unlocks it (and again if the browser
+   suspends it later); until then a note says so. */
+const soundLocked = () => !audioCtx || audioCtx.state !== 'running';
+function unlockSound(){
+  try{ audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state !== 'running') audioCtx.resume().then(showSoundLock).catch(() => {}); }catch(e){}
+  showSoundLock();
+}
+['pointerdown', 'keydown', 'touchend', 'click'].forEach(ev => addEventListener(ev, unlockSound, { capture:true, passive:true }));
+try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}   // starts 'suspended' if the browser hasn't allowed sound yet
+function showSoundLock(){
+  const want = alarmsActive() && ringOn() && soundLocked() && (ringing.size > 0 || alarms.some(a => !a.fired && !a.stopped && leagueShown(a)));
+  $('#soundLock').hidden = !want;
+}
 
 // Android only shows the permission prompt when it's asked straight from a tap, so this is called from
 // Send, the Allow button and Test alarm (asking later, after reading a screenshot, is ignored there).
@@ -3571,6 +3588,7 @@ setInterval(() => {
   const hid = alarms.filter(a => !a.fired && a.ring <= now && !leagueShown(a));   // switched-off leagues never ring: they just count as started
   if(hid.length){ hid.forEach(a => a.fired = true); store.set('tt.alarms', alarms); render(); }
   alarms.filter(a => !a.fired && a.ring <= now).forEach(fire);
+  showSoundLock();
   document.querySelectorAll('[data-count]').forEach(el => {
     const a = alarms.find(x=>x.id===el.dataset.count);
     if(a && !a.fired) el.textContent = countdown(a.ring);
