@@ -3563,8 +3563,10 @@ async function updateWake(){
 document.addEventListener('visibilitychange', updateWake);
 $('#wakeOn').checked = store.get('tt.wakeOn', isPhone()) !== false;
 $('#wakeOn').onchange = e => { store.set('tt.wakeOn', e.target.checked); updateWake(); };
-setInterval(() => {
+function mainTick(){
   const now = Date.now();
+  if(now - lastTick < 400) return;   // the page timer and the worker timer can both land in the same second
+  lastTick = now;
   updateWake();
   cleanupOld();
   tickTracker();
@@ -3575,7 +3577,17 @@ setInterval(() => {
     const a = alarms.find(x=>x.id===el.dataset.count);
     if(a && !a.fired) el.textContent = countdown(a.ring);
   });
-}, 1000);
+}
+/* The once-a-second check that rings alarms. A background tab's own timers get slowed to about once a minute (so an alarm
+   could ring up to a minute late), but a Web Worker's timer isn't slowed: it ticks the page instead, and coming back
+   to the tab (or waking the computer) checks straight away. The page's own timer stays as a backup. */
+let lastTick = 0;
+setInterval(mainTick, 1000);
+try{
+  const w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 1000);'], { type:'text/javascript' })));
+  w.onmessage = mainTick;
+}catch(e){}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') mainTick(); });
 
 /* ---------- Google account: sign-in and sync (Firebase) ----------
    Paste your Firebase web app config here (Firebase console → Project settings → Your apps).
